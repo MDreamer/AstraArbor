@@ -3,10 +3,9 @@
 #include "SoftwareSerial.h"
 #include "Adafruit_Pixie.h"
 
-// 3 4 5 6 7 
-//LEGS
-//8 9 10 11 12 
-//13
+//Leafs' pins: 3 4 5 6 7 
+//Legs' pins: 8 9 10 11 12 
+//button: 13
 
 #define NUMPIXELS 3 // Number of Pixies in the chain
 #define NUM_LEGS 5 // Number of legs in the structure
@@ -31,7 +30,12 @@
 const int buttonPin = 13;    // the number of the pushbutton pin
 
 // Variables will change:
-int leafStateMachine = HIGH;         // the current state of the leafs' state machine
+// leaf state machine:
+// 0 = 100% White
+// 1 = 75% White
+// 2 = pulse
+// 3 = OFF
+int leafStateMachine = 0;         // the current state of the leafs' state machine
 int buttonState;             // the current reading from the input pin
 int lastButtonState = LOW;   // the previous reading from the input pin
 
@@ -39,7 +43,6 @@ int lastButtonState = LOW;   // the previous reading from the input pin
 // will quickly become a bigger number than can be stored in an int.
 unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
 unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
-
 
 //Black color for wipeout
 #define BLCK   0x000000
@@ -82,12 +85,13 @@ long timePulse_core;
 const long interval_del_core=10;
 
 //current status fo the state machine & desc:
-// 1 = calm/normal
-// 2 - climex
-int state_machine = 1;
+// 0 = calm/normal
+// 1 = climex
+// 2 = off
+int leg_state_machine = 0;
 
-// the number of modes that the state machine is cycled thru
-int stateMachineModes = 3;
+// the number of modes that the state machine is cycled thru and support
+int stateMachineModes = 4;
 
 long lastCheck_state;
 long timePulse_state;
@@ -118,7 +122,7 @@ void setup() {
 	pinMode(buttonPin, INPUT);
   
 	//create a "real" random numbers
-	randomSeed(analogRead(0));
+	randomSeed(analogRead(0)); 
 
 	//start the LED strip
 	leaf_strip.begin();
@@ -188,17 +192,16 @@ timePulse_legs = millis();
       chainLEG[i].setPixelColor(2, 0,0,128+127*cos(2*PI/period_flash*(340-time1)));
       chainLEG[i].show();
     }
-    
-    if (period_flash > 2500 and period_flash < 7500)
+    if (period_flash > 7500)
+      period_flash = period_flash - 10;
+    else if (period_flash > 2500 and period_flash < 7500)
       period_flash = period_flash - 5;
     else if (period_flash < 2500)
       period_flash = period_flash - 2;
-    else
-      period_flash = period_flash - 10;
     if (period_flash <= 500)
     {
       period_flash = 10000;
-      state_machine = 1;
+      leg_state_machine = 1;
     }
     
     lastCheck_legs = millis();
@@ -207,7 +210,7 @@ timePulse_legs = millis();
 
 void pulseCore()
 {
-timePulse_core = millis();
+  timePulse_core = millis();
   if ((abs(timePulse_core - lastCheck_core)) > interval_del_core)
   {
       
@@ -226,6 +229,16 @@ timePulse_core = millis();
    }
 }
 
+void off_Legs()
+{
+  for (int i = 0;i < NUM_LEGS; i++)
+    {
+      chainLEG[i].setPixelColor(0, 0,0,0);
+      chainLEG[i].setPixelColor(1, 0,0,0);
+      chainLEG[i].setPixelColor(2, 0,0,0);
+      chainLEG[i].show();
+    }
+}
 // reads the button, takes care of debouncing and cycle thru the state machine
 void buttonReading()
 {
@@ -268,16 +281,27 @@ void loop() {
 
   buttonReading();
 	// leafs' state machine colors
-  	switch (leafStateMachine) {
+  switch (leafStateMachine) {
 	case 0:
+    // full(100%) white brightness
 		colorWipe(0,ledsPerStrip,15,5,0,255);
+    leg_state_machine = 0;
 		break;
 	case 1:
+    // 75% white brightness
 		colorWipe(0,ledsPerStrip,15,5,0,196);
+    leg_state_machine = 0;
 		break;
 	case 2:
-		long time1 = millis();
-		colorWipe(0,ledsPerStrip,128+25*cos(2*PI/12000*(3000-time1)),0,128+127*cos(2*PI/12000*(3000-time1)),0);
+		long timeStrip;
+    timeStrip = millis();
+		colorWipe(0,ledsPerStrip,128+25*cos(2*PI/12000*(3000-timeStrip)),0,128+127*cos(2*PI/12000*(3000-timeStrip)),0);
+    leg_state_machine = 0;
+    break;
+  case 3:
+    // Lights are down/off
+    colorWipe(0,ledsPerStrip,0,0,0,0);
+    leg_state_machine = 2;
 		break;
   }
   
@@ -286,21 +310,22 @@ void loop() {
   // if enough time has passed, changes status on the state machine
   if ((abs(timePulse_state - lastCheck_state)) > interval_del_state)
   {
-    if (state_machine == 1)
+    if (leg_state_machine == 0)
       //TODO: prevents from the state machine to change status
-      state_machine = 1;
+      leg_state_machine = 0;
     lastCheck_state = millis();
   }
   
-  if (state_machine == 1)
+  switch (leg_state_machine) {
+  case 0:
     pulseLegs();
-  else
+    break;
+  case 1:
     fast_pulseLegs();
-
-  pulseCore();
-
-
-  
-   
+    break;
+  case 2:
+    off_Legs();
+    break;
+  }
 }
 
