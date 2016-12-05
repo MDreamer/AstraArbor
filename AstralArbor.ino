@@ -3,16 +3,18 @@
 #include "SoftwareSerial.h"
 #include "Adafruit_Pixie.h"
 
-//Leafs' pins: 3 4 5 6 7 
+//Leafs' pins: 3 4 5 6 7 - as of now pin 4 drives all the leafs
 //Legs' pins: 8 9 10 11 12 
 //button: 13
+
+#define PIN_LEAF 4 // one pin is used to control over all the leafs
 
 #define NUMPIXELS 3 // Number of Pixies in the chain
 #define NUM_LEGS 5 // Number of legs in the structure
 
 #define PIXIE_PIN_CT_TX  5 // Pin number for Core Top
 #define PIXIE_PIN_CB_TX  6 // Pin number for Core Bottem
-#define PIXIE_PIN_LEGS_TX  7 // Pin number for the all 5 legs
+//#define PIXIE_PIN_LEGS_TX  7 // Pin number for the all 5 legs
 
 #define PIXIE_PIN_LEG_0_TX  8 // Pin number for leg 1
 #define PIXIE_PIN_LEG_1_TX  9 // Pin number for leg 2
@@ -24,10 +26,7 @@
 #define PIXIE_PIN_CB_UNUSED_RX  56 // Pin number for Core Bottem
 #define PIXIE_PIN_LEGS_UNUSED_RX  57 // Pin number for the 5 legs
 
-// one pin is used to control over all the leafs
-#define PIN_LEAF 4
-
-const int buttonPin = 13;    // the number of the pushbutton pin
+#define PIN_BUTTON 13    // the number of the push button pin
 
 // Variables will change:
 // leaf state machine:
@@ -38,11 +37,12 @@ const int buttonPin = 13;    // the number of the pushbutton pin
 int leafStateMachine = 0;         // the current state of the leafs' state machine
 int buttonState;             // the current reading from the input pin
 int lastButtonState = LOW;   // the previous reading from the input pin
+unsigned long lastButtonDebounceTime = 0;  // the last time the output pin was toggled
+unsigned long debounceButtonDelay = 50;    // the debounce time; increase if the output flickers
 
-// the following variables are unsigned long's because the time, measured in miliseconds,
-// will quickly become a bigger number than can be stored in an int.
-unsigned long lastDebounceTime = 0;  // the last time the output pin was toggled
-unsigned long debounceDelay = 50;    // the debounce time; increase if the output flickers
+// for blue climex
+int j;
+int period_flash = 10000;
 
 //Black color for wipeout
 #define BLCK   0x000000
@@ -53,7 +53,7 @@ const int ledsPerStrip = 90;
 // creates SoftSerial for the Pixies
 SoftwareSerial serialCT(PIXIE_PIN_CT_UNUSED_RX, PIXIE_PIN_CT_TX);
 SoftwareSerial serialCB(PIXIE_PIN_CB_UNUSED_RX, PIXIE_PIN_CB_TX);
-SoftwareSerial serialLEGS(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEGS_TX);
+//SoftwareSerial serialLEGS(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEGS_TX);
 
 //TODO: add a contructor array to the class
 //SoftwareSerial serialLEG[2] = {(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_0_TX),(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_0_TX);
@@ -93,8 +93,8 @@ int leg_state_machine = 0;
 // the number of modes that the state machine is cycled thru and support
 int stateMachineModes = 4;
 
-long lastCheck_state;
-long timePulse_state;
+long lastLegCheck_state;
+long timeLegPulse_state;
 const long interval_del_state=30000;
 
 int periodePulse_legs = 6000;
@@ -119,7 +119,7 @@ void colorWipe(int startLED, int endLED, int colorR,int colorG,int colorB, int w
   
 
 void setup() {
-	pinMode(buttonPin, INPUT);
+	pinMode(PIN_BUTTON, INPUT);
   
 	//create a "real" random numbers
 	randomSeed(analogRead(0)); 
@@ -130,7 +130,7 @@ void setup() {
 	//begins the SoftSerials
 	serialCT.begin(115200); // Pixie REQUIRES this baud rate
 	serialCB.begin(115200); // Pixie REQUIRES this baud rate
-	serialLEGS.begin(115200); // Pixie REQUIRES this baud rate
+	//serialLEGS.begin(115200); // Pixie REQUIRES this baud rate
 
   serialLEG_0.begin(115200); // Pixie REQUIRES this baud rate
   serialLEG_1.begin(115200); // Pixie REQUIRES this baud rate
@@ -149,9 +149,13 @@ void setup() {
 }
 
 
-void pulseLeg(Adafruit_Pixie &chainLEG)
-{
-
+void pulseLeg(Adafruit_Pixie &chainLEG_in)
+{ 
+  long time1 = millis();
+  chainLEG_in.setPixelColor(0, 128+25*cos(2*PI/12000*(3000-time1)),0,128+127*cos(2*PI/6000*(3000-time1)));
+  chainLEG_in.setPixelColor(1, 128+25*cos(2*PI/12000*(2000-time1)),0,128+127*cos(2*PI/6000*(2000-time1)));
+  chainLEG_in.setPixelColor(2, 128+25*cos(2*PI/12000*(1000-time1)),0,128+127*cos(2*PI/6000*(1000-time1)));      
+  chainLEG_in.show();
 }
 
 void pulseLegs()
@@ -173,9 +177,6 @@ void pulseLegs()
     lastCheck_legs = millis();
    }
 }
-int j;
-int period_flash = 10000;
-
 
 // Climex blue
 void fast_pulseLegs()
@@ -243,16 +244,16 @@ void off_Legs()
 void buttonReading()
 {
 	// read the state of the switch into a local variable:
-	int reading = digitalRead(buttonPin);
+	int reading = digitalRead(PIN_BUTTON);
 
 	// If the switch changed, due to noise or pressing:
 	if (reading != lastButtonState) 
 	{
 		// reset the debouncing timer
-		lastDebounceTime = millis();
+		lastButtonDebounceTime = millis();
 	}
 
-	if ((millis() - lastDebounceTime) > debounceDelay) 
+	if ((millis() - lastButtonDebounceTime) > debounceButtonDelay) 
 	{
 		// whatever the reading is at, it's been there for longer
 		// than the debounce delay, so take it as the actual current state:
@@ -306,14 +307,14 @@ void loop() {
   }
   
   // legs' state machine
-  timePulse_state = millis();
+  timeLegPulse_state = millis();
   // if enough time has passed, changes status on the state machine
-  if ((abs(timePulse_state - lastCheck_state)) > interval_del_state)
+  if ((abs(timeLegPulse_state - lastLegCheck_state)) > interval_del_state)
   {
     if (leg_state_machine == 0)
       //TODO: prevents from the state machine to change status
       leg_state_machine = 0;
-    lastCheck_state = millis();
+    lastLegCheck_state = millis();
   }
   
   switch (leg_state_machine) {
