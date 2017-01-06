@@ -2,12 +2,33 @@
 #include <Adafruit_NeoPixel.h>
 #include "SoftwareSerial.h"
 #include "Adafruit_Pixie.h"
-
-//Leafs' pins: 3 4 5 6 7 - as of now pin 4 drives all the leafs
+#include <NewPing.h>
+//Leafs' pin: pin 4 drives all the leafs
 //Legs' pins: 8 9 10 11 12 
 //button: 13
+//Stage: 3 
+//free: 4 5 6 7
+//UltraSonic sensors: 22, 24, 26, 28, 30
+
+#define SONAR_NUM     5 // Number of sensors.
+#define MAX_DISTANCE 400 // Maximum distance (in cm) to ping.
+#define PING_INTERVAL 50 // 33 Milliseconds between sensor pings (29ms is about the min to avoid cross-sensor echo).
+
+unsigned long pingTimer[SONAR_NUM]; // Holds the times when the next ping should happen for each sensor.
+unsigned int cm[SONAR_NUM];         // Where the ping distances are stored.
+uint8_t currentSensor = 0;          // Keeps track of which sensor is active.
+
+NewPing sonar[SONAR_NUM] = {     // Sensor object array.
+  NewPing(22, 22, MAX_DISTANCE), // Each sensor's trigger pin, echo pin, and max distance to ping.
+  NewPing(24, 24, MAX_DISTANCE),
+  NewPing(26, 26, MAX_DISTANCE),
+  NewPing(28, 28, MAX_DISTANCE),
+  NewPing(30, 30, MAX_DISTANCE),
+};
 
 #define PIN_LEAF 4 // one pin is used to control over all the leafs
+#define PIN_STAGE 3 // one pin is used to 5 sides of the stage, 
+                    //6 LEDs in every side
 
 #define NUMPIXELS 3 // Number of Pixies in the chain
 #define NUM_LEGS 5 // Number of legs in the structure
@@ -50,6 +71,9 @@ int period_flash = 10000;
 // number of LEDs per leaf
 const int ledsPerStrip = 90;
 
+const int LedsNumSide = 6;
+const int SidesNum = 5;
+
 // creates SoftSerial for the Pixies
 SoftwareSerial serialCT(PIXIE_PIN_CT_UNUSED_RX, PIXIE_PIN_CT_TX);
 SoftwareSerial serialCB(PIXIE_PIN_CB_UNUSED_RX, PIXIE_PIN_CB_TX);
@@ -71,6 +95,8 @@ Adafruit_Pixie chainLEG[NUM_LEGS] = {(Adafruit_Pixie(NUMPIXELS, &serialLEG_0)),(
 
 // leafs control
 Adafruit_NeoPixel leaf_strip = Adafruit_NeoPixel(ledsPerStrip, PIN_LEAF, NEO_GRBW + NEO_KHZ800);
+// stage control
+Adafruit_NeoPixel stage_strip = Adafruit_NeoPixel(30, PIN_STAGE, NEO_GRBW + NEO_KHZ800);
 
 long lastCheck_legs;
 long timePulse_legs;
@@ -116,7 +142,23 @@ void colorWipe(int startLED, int endLED, int colorR,int colorG,int colorB, int w
   }
   leaf_strip.show();
 }
-  
+
+//is being used for the strips/leafs
+void colorWipeStage(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
+{
+  //kill all the leds
+  for (int i=0; i < (LedsNumSide*SidesNum); i++)
+  {
+    stage_strip.setPixelColor(i, BLCK);
+    
+  }
+  //light just one one we need
+  for (int i=startLED; i < endLED; i++)
+  {
+    stage_strip.setPixelColor(i, colorR,colorG,colorB,whiteC);
+  }
+  stage_strip.show();
+}
 
 void setup() {
 	pinMode(PIN_BUTTON, INPUT);
@@ -124,9 +166,12 @@ void setup() {
 	//create a "real" random numbers
 	randomSeed(analogRead(0)); 
 
-	//start the LED strip
+	//start the LED strips
 	leaf_strip.begin();
+  stage_strip.begin();
 
+  colorWipeStage(1,(LedsNumSide*SidesNum),255,0,255,128);
+  
 	//begins the SoftSerials
 	serialCT.begin(115200); // Pixie REQUIRES this baud rate
 	serialCB.begin(115200); // Pixie REQUIRES this baud rate
@@ -279,7 +324,18 @@ void buttonReading()
 }
 
 void loop() {
-
+  colorWipeStage(24,30,255,0,0,30);
+  /*
+  for (uint8_t i = 0; i < SONAR_NUM; i++) { // Loop through all the sensors.
+    if (sonar[i].ping_cm() < 30)
+      colorWipeStage(((i*LedsNumSide)),((i+1)*LedsNumSide),0,0,255,255);
+    else
+      colorWipeStage(((i*LedsNumSide)),((i+1)*LedsNumSide),255,0,0,255);
+    delay(50);
+  }
+  */
+  
+  
   buttonReading();
 	// leafs' state machine colors
   switch (leafStateMachine) {
