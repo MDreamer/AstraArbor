@@ -8,7 +8,7 @@
 //button: 13
 //Stage: 3 
 //free: 4 5 6 7
-//UltraSonic sensors: 22, 24, 26, 28, 30
+//UltraSonic sensors: 22, 24, 26, 28, 30 - the sensors are not order like that
 
 #define SONAR_NUM     5 // Number of sensors.
 #define MAX_DISTANCE 400 // Maximum distance (in cm) to ping.
