@@ -12,18 +12,18 @@
 
 #define SONAR_NUM     5 // Number of sensors.
 #define MAX_DISTANCE 400 // Maximum distance (in cm) to ping.
-#define PING_INTERVAL 50 // 33 Milliseconds between sensor pings (29ms is about the min to avoid cross-sensor echo).
 
-unsigned long pingTimer[SONAR_NUM]; // Holds the times when the next ping should happen for each sensor.
+const unsigned int detection_dis = 80;
 unsigned int cm[SONAR_NUM];         // Where the ping distances are stored.
-uint8_t currentSensor = 0;          // Keeps track of which sensor is active.
+bool sen_trig[SONAR_NUM] = {false,false,false,false,false};         // Are the sensors triggered
+uint8_t iSensorCycle = 0;          // Keeps track of which sensor is active.
 
 NewPing sonar[SONAR_NUM] = {     // Sensor object array.
-  NewPing(22, 22, MAX_DISTANCE), // Each sensor's trigger pin, echo pin, and max distance to ping.
-  NewPing(24, 24, MAX_DISTANCE),
-  NewPing(26, 26, MAX_DISTANCE),
+  NewPing(24, 24, MAX_DISTANCE), // Each sensor's trigger pin, echo pin, and max distance to ping.
+  NewPing(22, 22, MAX_DISTANCE),
   NewPing(28, 28, MAX_DISTANCE),
   NewPing(30, 30, MAX_DISTANCE),
+  NewPing(26, 26, MAX_DISTANCE),
 };
 
 #define PIN_LEAF 4 // one pin is used to control over all the leafs
@@ -110,6 +110,11 @@ long lastCheck_core;
 long timePulse_core;
 const long interval_del_core=10;
 
+long timeUltrasonic;
+long lastUltrasonic;
+const long interval_timeUltrasonic = 10; //becasue we have 5 sensors it means that 50ms wil pass between every reading form every individual sensor
+                                         //which is enough - the minimum value is ~29ms
+
 //current status fo the state machine & desc:
 // 0 = calm/normal
 // 1 = climex
@@ -146,12 +151,6 @@ void colorWipe(int startLED, int endLED, int colorR,int colorG,int colorB, int w
 //is being used for the strips/leafs
 void colorWipeStage(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
 {
-  //kill all the leds
-  for (int i=0; i < (LedsNumSide*SidesNum); i++)
-  {
-    stage_strip.setPixelColor(i, BLCK);
-    
-  }
   //light just one one we need
   for (int i=startLED; i < endLED; i++)
   {
@@ -162,6 +161,8 @@ void colorWipeStage(int startLED, int endLED, int colorR,int colorG,int colorB, 
 
 void setup() {
 	pinMode(PIN_BUTTON, INPUT);
+
+  //Serial.begin(115200); // Open serial monitor at 115200 baud to see ping results.
   
 	//create a "real" random numbers
 	randomSeed(analogRead(0)); 
@@ -169,8 +170,8 @@ void setup() {
 	//start the LED strips
 	leaf_strip.begin();
   stage_strip.begin();
-
-  colorWipeStage(1,(LedsNumSide*SidesNum),255,0,255,128);
+   
+  colorWipeStage(1,(LedsNumSide*SidesNum),192,0,10,30);
   
 	//begins the SoftSerials
 	serialCT.begin(115200); // Pixie REQUIRES this baud rate
@@ -323,17 +324,40 @@ void buttonReading()
   lastButtonState = reading;
 }
 
-void loop() {
-  colorWipeStage(24,30,255,0,0,30);
-  /*
-  for (uint8_t i = 0; i < SONAR_NUM; i++) { // Loop through all the sensors.
-    if (sonar[i].ping_cm() < 30)
-      colorWipeStage(((i*LedsNumSide)),((i+1)*LedsNumSide),0,0,255,255);
-    else
-      colorWipeStage(((i*LedsNumSide)),((i+1)*LedsNumSide),255,0,0,255);
-    delay(50);
+void loop() 
+{
+  // legs' state machine
+  timeUltrasonic = millis();
+  // every loog check if the time is right to read from the next sesor
+  if ((abs(timeUltrasonic - lastUltrasonic)) > interval_timeUltrasonic)
+  {
+    cm[iSensorCycle] = sonar[iSensorCycle].ping_cm();
+    /*
+    Serial.print("Sensor: ");
+    Serial.print(iSensorCycle);
+    Serial.print("Dis: ");
+    Serial.print(cm[iSensorCycle]);
+    Serial.print("LED start: ");
+    Serial.print(iSensorCycle*LedsNumSide);
+    Serial.print("LED end: ");
+    Serial.println(((iSensorCycle+1)*LedsNumSide));
+    */
+    if (cm[iSensorCycle] < detection_dis and sen_trig[iSensorCycle]==false)
+    {
+      colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),255,0,0,10);
+      sen_trig[iSensorCycle] = true;
+    }
+    else if ((sen_trig[iSensorCycle]==true) and cm[iSensorCycle] > detection_dis)
+    {
+      colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),192,0,10,30);
+      sen_trig[iSensorCycle] = false;
+    }
+    timeUltrasonic = millis();
+    iSensorCycle++;
+    iSensorCycle = iSensorCycle % SONAR_NUM;
   }
-  */
+  
+  
   
   
   buttonReading();
