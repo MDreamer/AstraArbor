@@ -3,160 +3,18 @@
 #include "SoftwareSerial.h"
 #include "Adafruit_Pixie.h"
 #include <NewPing.h>
-//Leafs' pin: pin 4 drives all the leafs
-//Legs' pins: 8 9 10 11 12 
-//button: 13
-//Stage: 3 
-//free: 4 5 6 7
-//UltraSonic sensors: 22, 24, 26, 28, 30 - the sensors are not order like that
+#include "config.h"
+#include "core.h"
+#include "legs.h"
 
-#define SONAR_NUM     5 // Number of sensors.
-#define MAX_DISTANCE 400 // Maximum distance (in cm) to ping.
-
-const unsigned int detection_dis = 80;
-unsigned int cm[SONAR_NUM];         // Where the ping distances are stored.
-bool sen_trig[SONAR_NUM] = {false,false,false,false,false};         // Are the sensors triggered
-uint8_t iSensorCycle = 0;          // Keeps track of which sensor is active.
-
-NewPing sonar[SONAR_NUM] = {     // Sensor object array.
-  NewPing(24, 24, MAX_DISTANCE), // Each sensor's trigger pin, echo pin, and max distance to ping.
-  NewPing(22, 22, MAX_DISTANCE),
-  NewPing(28, 28, MAX_DISTANCE),
-  NewPing(30, 30, MAX_DISTANCE),
-  NewPing(26, 26, MAX_DISTANCE),
-};
-
-#define PIN_LEAF 4 // one pin is used to control over all the leafs
-#define PIN_STAGE 3 // one pin is used to 5 sides of the stage, 
-                    //6 LEDs in every side
-
-#define NUMPIXELS 3 // Number of Pixies in the chain
-#define NUM_LEGS 5 // Number of legs in the structure
-
-#define PIXIE_PIN_CT_TX  5 // Pin number for Core Top
-#define PIXIE_PIN_CB_TX  6 // Pin number for Core Bottem
-//#define PIXIE_PIN_LEGS_TX  7 // Pin number for the all 5 legs
-
-#define PIXIE_PIN_LEG_0_TX  8 // Pin number for leg 1
-#define PIXIE_PIN_LEG_1_TX  9 // Pin number for leg 2
-#define PIXIE_PIN_LEG_2_TX  10 // Pin number for leg 3
-#define PIXIE_PIN_LEG_3_TX  11 // Pin number for leg 4
-#define PIXIE_PIN_LEG_4_TX  12 // Pin number for leg 5
-
-#define PIXIE_PIN_CT_UNUSED_RX  55 // Pin number for Core Top
-#define PIXIE_PIN_CB_UNUSED_RX  56 // Pin number for Core Bottem
-#define PIXIE_PIN_LEGS_UNUSED_RX  57 // Pin number for the 5 legs
-
-#define PIN_BUTTON 13    // the number of the push button pin
-
-// Variables will change:
-// leaf state machine:
-// 0 = 100% White
-// 1 = 75% White
-// 2 = pulse
-// 3 = OFF
-int leafStateMachine = 0;         // the current state of the leafs' state machine
-int buttonState;             // the current reading from the input pin
-int lastButtonState = LOW;   // the previous reading from the input pin
-unsigned long lastButtonDebounceTime = 0;  // the last time the output pin was toggled
-unsigned long debounceButtonDelay = 50;    // the debounce time; increase if the output flickers
-
-// for blue climex
-int j;
-int period_flash = 10000;
-
-//Black color for wipeout
-#define BLCK   0x000000
-
-// number of LEDs per leaf
-const int ledsPerStrip = 90;
-
-const int LedsNumSide = 6;
-const int SidesNum = 5;
-
-// creates SoftSerial for the Pixies
-SoftwareSerial serialCT(PIXIE_PIN_CT_UNUSED_RX, PIXIE_PIN_CT_TX);
-SoftwareSerial serialCB(PIXIE_PIN_CB_UNUSED_RX, PIXIE_PIN_CB_TX);
-//SoftwareSerial serialLEGS(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEGS_TX);
-
-//TODO: add a contructor array to the class
-//SoftwareSerial serialLEG[2] = {(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_0_TX),(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_0_TX);
-SoftwareSerial serialLEG_0(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_0_TX);
-SoftwareSerial serialLEG_1(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_1_TX);
-SoftwareSerial serialLEG_2(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_2_TX);
-SoftwareSerial serialLEG_3(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_3_TX);
-SoftwareSerial serialLEG_4(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_4_TX);
-
-// creates the Pixes' objects instances
-Adafruit_Pixie chainCT = Adafruit_Pixie(NUMPIXELS, &serialCT);
-Adafruit_Pixie chainCB = Adafruit_Pixie(NUMPIXELS, &serialCB);
-Adafruit_Pixie chainLEG[NUM_LEGS] = {(Adafruit_Pixie(NUMPIXELS, &serialLEG_0)),(Adafruit_Pixie(NUMPIXELS, &serialLEG_1)), 
-(Adafruit_Pixie(NUMPIXELS, &serialLEG_2)) ,(Adafruit_Pixie(NUMPIXELS, &serialLEG_3)), (Adafruit_Pixie(NUMPIXELS, &serialLEG_4))};
-
-// leafs control
-Adafruit_NeoPixel leaf_strip = Adafruit_NeoPixel(ledsPerStrip, PIN_LEAF, NEO_GRBW + NEO_KHZ800);
-// stage control
-Adafruit_NeoPixel stage_strip = Adafruit_NeoPixel(30, PIN_STAGE, NEO_GRBW + NEO_KHZ800);
-
-long lastCheck_legs;
-long timePulse_legs;
-const long interval_del_legs=5;
-
-long lastCheck_leg[NUM_LEGS] = {0};
-long timePulse_leg[NUM_LEGS] = {0};
-const long interval_del_leg=5;
-
-long lastCheck_core;
-long timePulse_core;
-const long interval_del_core=10;
-
-long timeUltrasonic;
-long lastUltrasonic;
-const long interval_timeUltrasonic = 10; //becasue we have 5 sensors it means that 50ms wil pass between every reading form every individual sensor
-                                         //which is enough - the minimum value is ~29ms
-
-//current status fo the state machine & desc:
-// 0 = calm/normal
-// 1 = climex
-// 2 = off
-int leg_state_machine = 0;
-
-// the number of modes that the state machine is cycled thru and support
-int stateMachineModes = 4;
-
-long lastLegCheck_state;
-long timeLegPulse_state;
-const long interval_del_state=30000;
-
-int periodePulse_legs = 6000;
-int displacePulse_legs = 1000;
-
-//is being used for the strips/leafs
-void colorWipe(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
-{
-  //kill all the leds
-  for (int i=0; i < ledsPerStrip; i++)
-  {
-    leaf_strip.setPixelColor(i, BLCK);
-    
-  }
-  //light just one one we need
-  for (int i=0; i < ledsPerStrip; i++)
-  {
-    leaf_strip.setPixelColor(i, colorR,colorG,colorB,whiteC);
-  }
-  leaf_strip.show();
-}
-
-//is being used for the strips/leafs
-void colorWipeStage(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
+void colorWipeLeaf(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
 {
   //light just one one we need
   for (int i=startLED; i < endLED; i++)
   {
-    stage_strip.setPixelColor(i, colorR,colorG,colorB,whiteC);
+    leaf_strip.setPixelColor(i, colorR,colorG,colorB,whiteC);
   }
-  stage_strip.show();
+  leaf_strip.show();
 }
 
 void setup() {
@@ -194,194 +52,103 @@ void setup() {
  
 }
 
-
-void pulseLeg(Adafruit_Pixie &chainLEG_in)
-{ 
-  long time1 = millis();
-  chainLEG_in.setPixelColor(0, 128+25*cos(2*PI/12000*(3000-time1)),0,128+127*cos(2*PI/6000*(3000-time1)));
-  chainLEG_in.setPixelColor(1, 128+25*cos(2*PI/12000*(2000-time1)),0,128+127*cos(2*PI/6000*(2000-time1)));
-  chainLEG_in.setPixelColor(2, 128+25*cos(2*PI/12000*(1000-time1)),0,128+127*cos(2*PI/6000*(1000-time1)));      
-  chainLEG_in.show();
-}
-
-void pulseLegs()
-{
-  timePulse_legs = millis();
-  if ((abs(timePulse_legs - lastCheck_legs)) > interval_del_legs)
-  {
-      
-    long time1 = millis();
-
-    for (int i = 0;i < NUM_LEGS; i++)
-    {
-      chainLEG[i].setPixelColor(0, 128+25*cos(2*PI/12000*(3000-time1)),0,128+127*cos(2*PI/6000*(3000-time1)));
-      chainLEG[i].setPixelColor(1, 128+25*cos(2*PI/12000*(2000-time1)),0,128+127*cos(2*PI/6000*(2000-time1)));
-      chainLEG[i].setPixelColor(2, 128+25*cos(2*PI/12000*(1000-time1)),0,128+127*cos(2*PI/6000*(1000-time1)));      
-      chainLEG[i].show();
-    }
-    
-    lastCheck_legs = millis();
-   }
-}
-
-// Climex blue
-void fast_pulseLegs()
-{
-timePulse_legs = millis();
-  if ((abs(timePulse_legs - lastCheck_legs)) > 10)
-  {
-      
-    long time1 = millis();
-    for (int i = 0;i < NUM_LEGS; i++)
-    {
-      chainLEG[i].setPixelColor(0, 0,0,128+127*cos(2*PI/period_flash*(time1)));
-      chainLEG[i].setPixelColor(1, 0,0,128+127*cos(2*PI/period_flash*(170-time1)));
-      chainLEG[i].setPixelColor(2, 0,0,128+127*cos(2*PI/period_flash*(340-time1)));
-      chainLEG[i].show();
-    }
-    if (period_flash > 7500)
-      period_flash = period_flash - 10;
-    else if (period_flash > 2500 and period_flash < 7500)
-      period_flash = period_flash - 5;
-    else if (period_flash < 2500)
-      period_flash = period_flash - 2;
-    if (period_flash <= 500)
-    {
-      period_flash = 10000;
-      leg_state_machine = 1;
-    }
-    
-    lastCheck_legs = millis();
-   }
-}
-
-void pulseCore()
-{
-  timePulse_core = millis();
-  if ((abs(timePulse_core - lastCheck_core)) > interval_del_core)
-  {
-      
-    long time2 = millis();
-    chainCT.setPixelColor(0, 0,128+127*cos(2*PI/6000*(3000-time2)),128+63*cos(2*PI/6000*(3000-time2)));
-    chainCT.setPixelColor(1, 0,128+127*cos(2*PI/6000*(3000-time2)),128+63*cos(2*PI/6000*(2000-time2)));
-    chainCT.setPixelColor(2, 0,128+127*cos(2*PI/6000*(3000-time2)),128+63*cos(2*PI/6000*(1000-time2)));      
-    chainCT.show();
-
-    chainCB.setPixelColor(0, 0,128+127*cos(2*PI/6000*(3000-time2)),128+63*cos(2*PI/6000*(3000-time2)));
-    chainCB.setPixelColor(1, 0,128+127*cos(2*PI/6000*(3000-time2)),128+63*cos(2*PI/6000*(2000-time2)));
-    chainCB.setPixelColor(2, 0,128+127*cos(2*PI/6000*(3000-time2)),128+63*cos(2*PI/6000*(1000-time2)));      
-    chainCB.show();
-    
-    lastCheck_core = millis();
-   }
-}
-
-void off_Legs()
-{
-  for (int i = 0;i < NUM_LEGS; i++)
-    {
-      chainLEG[i].setPixelColor(0, 0,0,0);
-      chainLEG[i].setPixelColor(1, 0,0,0);
-      chainLEG[i].setPixelColor(2, 0,0,0);
-      chainLEG[i].show();
-    }
-}
-// reads the button, takes care of debouncing and cycle thru the state machine
-void buttonReading()
-{
-	// read the state of the switch into a local variable:
-	int reading = digitalRead(PIN_BUTTON);
-
-	// If the switch changed, due to noise or pressing:
-	if (reading != lastButtonState) 
-	{
-		// reset the debouncing timer
-		lastButtonDebounceTime = millis();
-	}
-
-	if ((millis() - lastButtonDebounceTime) > debounceButtonDelay) 
-	{
-		// whatever the reading is at, it's been there for longer
-		// than the debounce delay, so take it as the actual current state:
-
-		// if the button state has changed:
-		if (reading != buttonState) 
-		{
-	  		buttonState = reading;
-
-	  		// only toggle the LED if the new button state is HIGH
-	  		if (buttonState == HIGH) 
-	  		{
-	    		leafStateMachine = leafStateMachine + 1;
-	    		leafStateMachine = leafStateMachine % stateMachineModes;
-	  		}
-		}
-  }
-
-
-  // save the reading.  Next time through the loop,
-  // it'll be the lastButtonState:
-  lastButtonState = reading;
-}
-
 void loop() 
 {
-  // legs' state machine
+  timeRitualCheck = millis();
+  if ((abs(timeRitualCheck - lastRitualCheck)) > interval_ritual)
+  {
+    if (cur_ritual_num < max_ritual) //rital is possible, start counting form now
+    {
+      if (cur_ritual_num == 0) //save the first ritual timestamp to be used on 10 min counter
+        lastRitualTimestamp = timeRitualCheck;
+      cur_ritual_num++;
+
+      //TODO: start ritual
+      // if start a ritual command has been given and there is no other ritual being processed start it
+      //TODO: reset inProcessRitual at the end of the ritual
+      if (startRitual and inProcessRitual == false)
+      {
+        inProcessRitual = true;
+        //do ritual
+        startRitual = false; //ready for the next ritual
+      }
+    }
+
+    // if enough time passed since the first ritual reset thte timer
+    if ((abs(timeRitualCheck - lastRitualTimestamp)) > max_ritual_period) 
+      cur_ritual_num = 0;
+    // save tim for the next loop-check
+    lastRitualCheck = millis();
+  }
+
   timeUltrasonic = millis();
-  // every loog check if the time is right to read from the next sesor
+  // every loop check if the time is right to read from the next sensor
   if ((abs(timeUltrasonic - lastUltrasonic)) > interval_timeUltrasonic)
   {
     cm[iSensorCycle] = sonar[iSensorCycle].ping_cm();
-    /*
-    Serial.print("Sensor: ");
-    Serial.print(iSensorCycle);
-    Serial.print("Dis: ");
-    Serial.print(cm[iSensorCycle]);
-    Serial.print("LED start: ");
-    Serial.print(iSensorCycle*LedsNumSide);
-    Serial.print("LED end: ");
-    Serial.println(((iSensorCycle+1)*LedsNumSide));
-    */
     if (cm[iSensorCycle] < detection_dis and sen_trig[iSensorCycle]==false)
     {
-      colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),255,0,0,10);
+      //colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),255,0,0,10);
       sen_trig[iSensorCycle] = true;
     }
     else if ((sen_trig[iSensorCycle]==true) and cm[iSensorCycle] > detection_dis)
     {
-      colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),192,0,10,30);
+      //colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),192,0,10,30);
       sen_trig[iSensorCycle] = false;
     }
     timeUltrasonic = millis();
     iSensorCycle++;
     iSensorCycle = iSensorCycle % SONAR_NUM;
+
+    //check if all sensors are triggered and fade in completed. if so - start the ritual
+    for (int k = 0; k < SONAR_NUM; k++)
+      if (sen_trig[k] and stage_fade[k] == 255)
+        sumSenors++;
+
+    if (sumSenors == SONAR_NUM)
+      startRitual = true;
+
   }
   
-  
-  
-  
+  timeStageLights = millis();
+  if ((abs(timeStageLights - lastStageLights)) > interval_StageLights)
+  {
+    for (int i; i < SidesNum; i++)
+    {
+      //fade in
+      if ((stage_fade[i] < 255) and sen_trig[i] == true)
+        stage_fade[i]++;
+      //fade out
+      if ((stage_fade[i] > 0) and sen_trig[i] == false)
+        stage_fade[i]--;
+
+      colorWipeStage((i*LedsNumSide),((i+1)*LedsNumSide),stage_fade[i],0,0,10);
+    }
+    lastStageLights = millis();
+  }
+
   buttonReading();
 	// leafs' state machine colors
   switch (leafStateMachine) {
 	case 0:
     // full(100%) white brightness
-		colorWipe(0,ledsPerStrip,15,5,0,255);
+		colorWipeLeaf(0,ledsPerStrip,15,5,0,255);
     leg_state_machine = 0;
 		break;
 	case 1:
     // 75% white brightness
-		colorWipe(0,ledsPerStrip,15,5,0,196);
+		colorWipeLeaf(0,ledsPerStrip,15,5,0,196);
     leg_state_machine = 0;
 		break;
 	case 2:
 		long timeStrip;
     timeStrip = millis();
-		colorWipe(0,ledsPerStrip,128+25*cos(2*PI/12000*(3000-timeStrip)),0,128+127*cos(2*PI/12000*(3000-timeStrip)),0);
+		colorWipeLeaf(0,ledsPerStrip,128+25*cos(2*PI/12000*(3000-timeStrip)),0,128+127*cos(2*PI/12000*(3000-timeStrip)),0);
     leg_state_machine = 0;
     break;
   case 3:
     // Lights are down/off
-    colorWipe(0,ledsPerStrip,0,0,0,0);
+    colorWipeLeaf(0,ledsPerStrip,0,0,0,0);
     leg_state_machine = 2;
 		break;
   }
@@ -408,5 +175,70 @@ void loop()
     off_Legs();
     break;
   }
+
+  timeStateMachine = millis();
+  if ((abs(timeStateMachine - lastStateMachine)) > interval_StateMachine)
+  {
+    switch (state_machine) {
+    case 0: //idle
+      //leafs command
+      //legs command
+      //core command
+      break;
+    case 1: //ritual
+      //leafs command
+      //legs command
+      //core command
+      break;
+    case 2: //cooldown
+      //leafs command
+      //legs command
+      //core command
+      break;
+    }    
+    lastStateMachine = millis();
+  }
 }
+
+
+// reads the button, takes care of debouncing and cycle thru the state machine
+void buttonReading()
+{
+  // read the state of the switch into a local variable:
+  int reading = digitalRead(PIN_BUTTON);
+
+  // If the switch changed, due to noise or pressing:
+  if (reading != lastButtonState) 
+  {
+    // reset the debouncing timer
+    lastButtonDebounceTime = millis();
+  }
+
+  if ((millis() - lastButtonDebounceTime) > debounceButtonDelay) 
+  {
+    // whatever the reading is at, it's been there for longer
+    // than the debounce delay, so take it as the actual current state:
+
+    // if the button state has changed:
+    if (reading != buttonState) 
+    {
+        buttonState = reading;
+
+        // only toggle the LED if the new button state is HIGH
+        if (buttonState == HIGH) 
+        {
+          leafStateMachine = leafStateMachine + 1;
+          leafStateMachine = leafStateMachine % stateMachineModes;
+        }
+    }
+  }
+
+
+  // save the reading.  Next time through the loop,
+  // it'll be the lastButtonState:
+  lastButtonState = reading;
+}
+
+
+
 
