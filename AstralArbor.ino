@@ -54,6 +54,7 @@ void setup() {
 
 void loop() 
 {
+  // Checks if ritual should happen
   timeRitualCheck = millis();
   if ((abs(timeRitualCheck - lastRitualCheck)) > interval_ritual)
   {
@@ -81,6 +82,7 @@ void loop()
     lastRitualCheck = millis();
   }
 
+  //read US sensors
   timeUltrasonic = millis();
   // every loop check if the time is right to read from the next sensor
   if ((abs(timeUltrasonic - lastUltrasonic)) > interval_timeUltrasonic)
@@ -109,7 +111,8 @@ void loop()
       startRitual = true;
 
   }
-  
+
+  //Fade in/out stage lights
   timeStageLights = millis();
   if ((abs(timeStageLights - lastStageLights)) > interval_StageLights)
   {
