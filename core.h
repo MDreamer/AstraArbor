@@ -32,3 +32,23 @@ void colorWipeStage(int startLED, int endLED, int colorR,int colorG,int colorB, 
   stage_strip.show();
 }
 
+//is being used for the pingpong
+void colorWipePingPong(int startLED, int endLED, int colorR,int colorG,int colorB)
+{
+  //light just one one we need
+  for (int i=startLED; i < endLED; i++)
+  {
+    ping_chain.setPixelColor(i, colorR,colorG,colorB);
+  }
+  ping_chain.show();
+}
+
+void colorWipeLeaf(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
+{
+  //light just one one we need
+  for (int i=startLED; i < endLED; i++)
+  {
+    leaf_strip.setPixelColor(i, colorR,colorG,colorB,whiteC);
+  }
+  leaf_strip.show();
+}

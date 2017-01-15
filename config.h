@@ -8,10 +8,11 @@
 #include <NewPing.h>
 
 //Leafs' pin: pin 4 drives all the leafs
+//ping pong: 7
 //Legs' pins: 8 9 10 11 12 
 //button: 13
 //Stage: 3 
-//free: 4 5 6 7
+//Core: 5 6
 //UltraSonic sensors: 22, 24, 26, 28, 30 - the sensors are not order like that
 
 #define SONAR_NUM     5 // Number of sensors.
@@ -27,7 +28,8 @@
 
 #define PIXIE_PIN_CT_TX  5 // Pin number for Core Top
 #define PIXIE_PIN_CB_TX  6 // Pin number for Core Bottem
-//#define PIXIE_PIN_LEGS_TX  7 // Pin number for the all 5 legs
+
+#define PIN_PING_PONG  7 // Pin for the ping pong balls
 
 #define PIXIE_PIN_LEG_0_TX  8 // Pin number for leg 1
 #define PIXIE_PIN_LEG_1_TX  9 // Pin number for leg 2
@@ -48,8 +50,11 @@
 // number of LEDs per leaf
 const int ledsPerStrip = 90;
 
+// num of sides in the stage and the num of led in each side
 const int LedsNumSide = 6;
 const int SidesNum = 5;
+
+const int PingPongNum = 6; // num of ping pong balls = 5 (sides) + 1 (core)
 
 // distance to detect a person
 const unsigned int detection_dis = 80;
@@ -82,6 +87,10 @@ unsigned long debounceButtonDelay = 50;    // the debounce time; increase if the
 int j;
 int period_flash = 10000;
 
+int period_cooldown = 30000;
+long timestamp_cooldown;
+
+
 //used to fade in/out the stage light
 uint8_t stage_fade[SidesNum];
 
@@ -93,18 +102,19 @@ long lastCheck_legs;
 long timePulse_legs;
 const long interval_del_legs=5;
 
-long lastCheck_leg[NUM_LEGS] = {0};
-long timePulse_leg[NUM_LEGS] = {0};
-const long interval_del_leg=5;
-
 long lastCheck_core;
 long timePulse_core;
 const long interval_del_core=10;
+
+long timeChasePongs; 
+long lastChasePongs;
+const long interval_ChasePongs = 250;
 
 long timeUltrasonic;
 long lastUltrasonic;
 const long interval_timeUltrasonic = 10; //becasue we have 5 sensors it means that 50ms wil pass between every reading form every individual sensor
                                          //which is enough - the minimum value is ~29ms
+                                         
 int sumSenors = 0;  //number of sensors that were triggered
 
 int max_ritual = 3; // number of ritual every max_ritual_period time
@@ -117,6 +127,9 @@ bool inProcessRitual = false; // is there a ritual in process
 long lastRitualCheck;
 long timeRitualCheck;
 const long interval_ritual=1000;  //chekc x ms the status of ritual happening
+
+//used to cycle between the pong balls in ritual (chase)
+int iPongChase = 0;
 
 //current status fo the state machine & desc:
 // 0 = calm/normal
@@ -134,7 +147,7 @@ int stateMachineModes = 4;
 int state_machine = 0;
 long lastStateMachine;
 long timeStateMachine;
-const long interval_StateMachine = 100;
+const long interval_StateMachine = 5;
 
 
 long lastLegCheck_state;
@@ -166,7 +179,8 @@ Adafruit_Pixie chainLEG[NUM_LEGS] = {(Adafruit_Pixie(NUMPIXELS, &serialLEG_0)),(
 // leafs control
 Adafruit_NeoPixel leaf_strip = Adafruit_NeoPixel(ledsPerStrip, PIN_LEAF, NEO_GRBW + NEO_KHZ800);
 // stage control
-Adafruit_NeoPixel stage_strip = Adafruit_NeoPixel(30, PIN_STAGE, NEO_GRBW + NEO_KHZ800);
-//is being used for the strips/leafs
+Adafruit_NeoPixel stage_strip = Adafruit_NeoPixel((LedsNumSide * SidesNum), PIN_STAGE, NEO_GRBW + NEO_KHZ800);
+// ping pong control
+Adafruit_NeoPixel ping_chain = Adafruit_NeoPixel(PingPongNum, PIN_PING_PONG, NEO_RGB + NEO_KHZ800);
 
 #endif //__CONFIG_H

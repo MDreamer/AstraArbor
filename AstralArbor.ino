@@ -7,20 +7,12 @@
 #include "core.h"
 #include "legs.h"
 
-void colorWipeLeaf(int startLED, int endLED, int colorR,int colorG,int colorB, int whiteC)
-{
-  //light just one one we need
-  for (int i=startLED; i < endLED; i++)
-  {
-    leaf_strip.setPixelColor(i, colorR,colorG,colorB,whiteC);
-  }
-  leaf_strip.show();
-}
+
 
 void setup() {
 	pinMode(PIN_BUTTON, INPUT);
 
-  //Serial.begin(115200); // Open serial monitor at 115200 baud to see ping results.
+  Serial.begin(115200); // Open serial monitor at 115200 baud to see ping results.
   
 	//create a "real" random numbers
 	randomSeed(analogRead(0)); 
@@ -28,6 +20,7 @@ void setup() {
 	//start the LED strips
 	leaf_strip.begin();
   stage_strip.begin();
+  ping_chain.begin();
    
   colorWipeStage(1,(LedsNumSide*SidesNum),192,0,10,30);
   
@@ -64,14 +57,14 @@ void loop()
         lastRitualTimestamp = timeRitualCheck;
       cur_ritual_num++;
 
-      //TODO: start ritual
       // if start a ritual command has been given and there is no other ritual being processed start it
-      //TODO: reset inProcessRitual at the end of the ritual
-      if (startRitual and inProcessRitual == false)
+      //inProcessRitual is being reset-ed at the end of the ritual
+      if (startRitual and inProcessRitual == false and state_machine == 0)
       {
         inProcessRitual = true;
-        //do ritual
         startRitual = false; //ready for the next ritual
+        //do ritual
+        state_machine = 1;
       }
     }
 
@@ -98,7 +91,7 @@ void loop()
       //colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),192,0,10,30);
       sen_trig[iSensorCycle] = false;
     }
-    timeUltrasonic = millis();
+    
     iSensorCycle++;
     iSensorCycle = iSensorCycle % SONAR_NUM;
 
@@ -106,101 +99,130 @@ void loop()
     for (int k = 0; k < SONAR_NUM; k++)
       if (sen_trig[k] and stage_fade[k] == 255)
         sumSenors++;
+      else
+        sumSenors =0;
 
     if (sumSenors == SONAR_NUM)
-      startRitual = true;
-
-  }
-
-  //Fade in/out stage lights
-  timeStageLights = millis();
-  if ((abs(timeStageLights - lastStageLights)) > interval_StageLights)
-  {
-    for (int i; i < SidesNum; i++)
     {
-      //fade in
-      if ((stage_fade[i] < 255) and sen_trig[i] == true)
-        stage_fade[i]++;
-      //fade out
-      if ((stage_fade[i] > 0) and sen_trig[i] == false)
-        stage_fade[i]--;
-
-      colorWipeStage((i*LedsNumSide),((i+1)*LedsNumSide),stage_fade[i],0,0,10);
+      startRitual = true;
     }
-    lastStageLights = millis();
+    
+    for (int k = 0; k < SONAR_NUM; k++)
+    {
+      Serial.print("sen_num:");
+      Serial.print(k);
+      Serial.print(" sen cm:");
+      Serial.print(cm[k]);
+      Serial.print(" sen_trig:");
+      Serial.print(sen_trig[k]);
+      Serial.print(" sen_fade:");
+      Serial.print(stage_fade[k]);
+      Serial.print(" InProcessRitual:");
+      Serial.print(inProcessRitual);
+      Serial.print(" startRitual:");
+      Serial.print(startRitual);
+      Serial.print(" StateMachine:");
+      Serial.println(state_machine);
+    }
+    
+    Serial.println();
+    Serial.println();
+    
+    lastUltrasonic = millis();
   }
 
-  buttonReading();
-	// leafs' state machine colors
-  switch (leafStateMachine) {
-	case 0:
-    // full(100%) white brightness
-		colorWipeLeaf(0,ledsPerStrip,15,5,0,255);
-    leg_state_machine = 0;
-		break;
-	case 1:
-    // 75% white brightness
-		colorWipeLeaf(0,ledsPerStrip,15,5,0,196);
-    leg_state_machine = 0;
-		break;
-	case 2:
-		long timeStrip;
-    timeStrip = millis();
-		colorWipeLeaf(0,ledsPerStrip,128+25*cos(2*PI/12000*(3000-timeStrip)),0,128+127*cos(2*PI/12000*(3000-timeStrip)),0);
-    leg_state_machine = 0;
-    break;
-  case 3:
-    // Lights are down/off
-    colorWipeLeaf(0,ledsPerStrip,0,0,0,0);
-    leg_state_machine = 2;
-		break;
-  }
   
-  // legs' state machine
-  timeLegPulse_state = millis();
-  // if enough time has passed, changes status on the state machine
-  if ((abs(timeLegPulse_state - lastLegCheck_state)) > interval_del_state)
-  {
-    if (leg_state_machine == 0)
-      //TODO: prevents from the state machine to change status
-      leg_state_machine = 0;
-    lastLegCheck_state = millis();
-  }
-  
-  switch (leg_state_machine) {
-  case 0:
-    pulseLegs();
-    break;
-  case 1:
-    fast_pulseLegs();
-    break;
-  case 2:
-    off_Legs();
-    break;
-  }
 
+  //buttonReading();
+	
+  
   timeStateMachine = millis();
   if ((abs(timeStateMachine - lastStateMachine)) > interval_StateMachine)
   {
     switch (state_machine) {
+      
     case 0: //idle
+      Serial.println("idle");
       //leafs command
+      colorWipeLeaf(0,ledsPerStrip,128+25*cos(2*PI/12000*(3000-timeStateMachine)),0,128+127*cos(2*PI/12000*(3000-timeStateMachine)),0);
       //legs command
+      idle_pulseLegs();
       //core command
+      
+      //Fade in/out stage lights
+      timeStageLights = millis();
+      if ((abs(timeStageLights - lastStageLights)) > interval_StageLights)
+      {
+        //create values for fade in-out for the pingpong and the stage lights
+        for (int i; i < SidesNum; i++)
+        {
+          //fade in
+          if ((stage_fade[i] < 255) and sen_trig[i] == true)
+            stage_fade[i]++;
+          //fade out
+          if ((stage_fade[i] > 0) and sen_trig[i] == false)
+            stage_fade[i]--;  
+    
+          
+          //stage light control
+          colorWipeStage((i*LedsNumSide),((i+1)*LedsNumSide),stage_fade[i],0,0,10);
+          //pingpong control
+          colorWipePingPong(i,i+1,stage_fade[i],0,stage_fade[i]);
+          
+        }
+        lastStageLights = millis();
+      }
       break;
+     
     case 1: //ritual
+      Serial.println("Ritual");
       //leafs command
+      colorWipeLeaf(0,ledsPerStrip,128+25*cos(2*PI/6000*(3000-timeStateMachine)),0,128+127*cos(2*PI/6000*(3000-timeStateMachine)),0);
       //legs command
+      ritual_pulseLegs();
       //core command
+      //cycle ping pong
+            
+      timeChasePongs = millis();
+      if ((abs(timeChasePongs - lastChasePongs)) > interval_ChasePongs)
+      {
+          //pingpong control
+          if (iPongChase == 0)
+          {
+            colorWipePingPong(0,1,255,0,128);
+            colorWipePingPong(5,6,0,0,0);
+          }
+          else
+          {
+            colorWipePingPong(iPongChase,iPongChase+1,255,0,128);
+            colorWipePingPong(iPongChase-1,iPongChase,0,0,0);
+          }   
+        
+        iPongChase++;
+        iPongChase % SONAR_NUM;
+        lastChasePongs = millis();
+      }
+      //solid stage lights
+      colorWipeStage(0,(LedsNumSide * SidesNum),255,255,0,10);
       break;
     case 2: //cooldown
+      Serial.println("Cooldown");
       //leafs command
+      colorWipeLeaf(0,ledsPerStrip,40+25*cos(2*PI/24000*(3000-timeStateMachine)),25,128+127*cos(2*PI/24000*(3000-timeStateMachine)),0);
       //legs command
+      cooldown_pulseLegs();
       //core command
+      //stage light control
+      colorWipeStage(0,(LedsNumSide * SidesNum),0,0,220,10);
+      //pingpong control
+      colorWipePingPong(0,PingPongNum,0,0,220);
       break;
-    }    
+      
+    }
     lastStateMachine = millis();
   }
+  
+  
 }
 
 
