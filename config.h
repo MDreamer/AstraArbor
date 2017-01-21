@@ -7,17 +7,17 @@
 #include "Adafruit_Pixie.h"
 #include <NewPing.h>
 
+//Stage: 3 
 //Leafs' pin: pin 4 drives all the leafs
+//Core: 5 (Pixies)
+//Flowers: 6
 //ping pong: 7
 //Legs' pins: 8 9 10 11 12 
 //button: 13
-//Stage: 3 
-//Core: 5 6
 //UltraSonic sensors: 22, 24, 26, 28, 30 - the sensors are not order like that
 
 #define SONAR_NUM     5 // Number of sensors.
 #define MAX_DISTANCE 400 // Maximum distance (in cm) to ping.
-
 
 #define PIN_LEAF 4 // one pin is used to control over all the leafs
 #define PIN_STAGE 3 // one pin is used to 5 sides of the stage, 
@@ -26,8 +26,11 @@
 #define NUMPIXELS 3 // Number of Pixies in the chain
 #define NUM_LEGS 5 // Number of legs in the structure
 
+#define PIN_FLOWERS 6 // Number of Pixies in the chain
+#define NUM_FLOWERS 3 // Number of legs in the structure
+
 #define PIXIE_PIN_CT_TX  5 // Pin number for Core Top
-#define PIXIE_PIN_CB_TX  6 // Pin number for Core Bottem
+//#define PIXIE_PIN_CB_TX  6 // Pin number for Core Bottem
 
 #define PIN_PING_PONG  7 // Pin for the ping pong balls
 
@@ -57,7 +60,7 @@ const int SidesNum = 5;
 const int PingPongNum = 6; // num of ping pong balls = 5 (sides) + 1 (core)
 
 // distance to detect a person
-const unsigned int detection_dis = 80;
+const unsigned int detection_dis = 60;
 
 unsigned int cm[SONAR_NUM];         // Where the ping distances are stored.
 bool sen_trig[SONAR_NUM] = {false,false,false,false,false};         // Are the sensors triggered
@@ -114,6 +117,10 @@ long timeUltrasonic;
 long lastUltrasonic;
 const long interval_timeUltrasonic = 10; //becasue we have 5 sensors it means that 50ms wil pass between every reading form every individual sensor
                                          //which is enough - the minimum value is ~29ms
+
+long timeFlowers;
+long lastFlowers;
+const long interval_timeFlowers = 10; 
                                          
 int sumSenors = 0;  //number of sensors that were triggered
 
@@ -159,7 +166,7 @@ int displacePulse_legs = 1000;
 
 // creates SoftSerial for the Pixies
 SoftwareSerial serialCT(PIXIE_PIN_CT_UNUSED_RX, PIXIE_PIN_CT_TX);
-SoftwareSerial serialCB(PIXIE_PIN_CB_UNUSED_RX, PIXIE_PIN_CB_TX);
+//SoftwareSerial serialCB(PIXIE_PIN_CB_UNUSED_RX, PIXIE_PIN_CB_TX);
 //SoftwareSerial serialLEGS(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEGS_TX);
 
 //TODO: add a contructor array to the class
@@ -172,7 +179,7 @@ SoftwareSerial serialLEG_4(PIXIE_PIN_LEGS_UNUSED_RX, PIXIE_PIN_LEG_4_TX);
 
 // creates the Pixes' objects instances
 Adafruit_Pixie chainCT = Adafruit_Pixie(NUMPIXELS, &serialCT);
-Adafruit_Pixie chainCB = Adafruit_Pixie(NUMPIXELS, &serialCB);
+//Adafruit_Pixie chainCB = Adafruit_Pixie(NUMPIXELS, &serialCB);
 Adafruit_Pixie chainLEG[NUM_LEGS] = {(Adafruit_Pixie(NUMPIXELS, &serialLEG_0)),(Adafruit_Pixie(NUMPIXELS, &serialLEG_1)), 
 (Adafruit_Pixie(NUMPIXELS, &serialLEG_2)) ,(Adafruit_Pixie(NUMPIXELS, &serialLEG_3)), (Adafruit_Pixie(NUMPIXELS, &serialLEG_4))};
 
@@ -182,5 +189,8 @@ Adafruit_NeoPixel leaf_strip = Adafruit_NeoPixel(ledsPerStrip, PIN_LEAF, NEO_GRB
 Adafruit_NeoPixel stage_strip = Adafruit_NeoPixel((LedsNumSide * SidesNum), PIN_STAGE, NEO_GRBW + NEO_KHZ800);
 // ping pong control
 Adafruit_NeoPixel ping_chain = Adafruit_NeoPixel(PingPongNum, PIN_PING_PONG, NEO_RGB + NEO_KHZ800);
+// flowers control
+Adafruit_NeoPixel flower_chain = Adafruit_NeoPixel(NUM_FLOWERS, PIN_FLOWERS, NEO_RGB + NEO_KHZ800);
+
 
 #endif //__CONFIG_H

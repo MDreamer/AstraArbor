@@ -26,6 +26,7 @@ void idle_pulseLegs()
       chainLEG[i].show();
     }
     
+      
     lastCheck_legs = millis();
    }
 }

@@ -21,12 +21,13 @@ void setup() {
 	leaf_strip.begin();
   stage_strip.begin();
   ping_chain.begin();
+  flower_chain.begin();
    
   colorWipeStage(1,(LedsNumSide*SidesNum),192,0,10,30);
   
 	//begins the SoftSerials
 	serialCT.begin(115200); // Pixie REQUIRES this baud rate
-	serialCB.begin(115200); // Pixie REQUIRES this baud rate
+//	serialCB.begin(115200); // Pixie REQUIRES this baud rate
 	//serialLEGS.begin(115200); // Pixie REQUIRES this baud rate
 
   serialLEG_0.begin(115200); // Pixie REQUIRES this baud rate
@@ -36,7 +37,7 @@ void setup() {
   serialLEG_4.begin(115200); // Pixie REQUIRES this baud rate
   
 	chainCT.setBrightness(200);  // Adjust as necessary to avoid blinding
-	chainCB.setBrightness(200);  // Adjust as necessary to avoid blinding
+//	chainCB.setBrightness(200);  // Adjust as necessary to avoid blinding
 
   for (int i = 0;i < NUM_LEGS; i++)
   {
@@ -81,14 +82,12 @@ void loop()
   if ((abs(timeUltrasonic - lastUltrasonic)) > interval_timeUltrasonic)
   {
     cm[iSensorCycle] = sonar[iSensorCycle].ping_cm();
-    if (cm[iSensorCycle] < detection_dis and sen_trig[iSensorCycle]==false)
+    if (cm[iSensorCycle] < detection_dis and cm[iSensorCycle] != 0 and sen_trig[iSensorCycle]==false)
     {
-      //colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),255,0,0,10);
       sen_trig[iSensorCycle] = true;
     }
-    else if ((sen_trig[iSensorCycle]==true) and cm[iSensorCycle] > detection_dis)
+    else if ((sen_trig[iSensorCycle]==true) and (cm[iSensorCycle] > detection_dis or cm[iSensorCycle] == 0))
     {
-      //colorWipeStage((iSensorCycle*LedsNumSide),((iSensorCycle+1)*LedsNumSide),192,0,10,30);
       sen_trig[iSensorCycle] = false;
     }
     
@@ -97,7 +96,7 @@ void loop()
 
     //check if all sensors are triggered and fade in completed. if so - start the ritual
     for (int k = 0; k < SONAR_NUM; k++)
-      if (sen_trig[k] and stage_fade[k] == 255)
+      if (sen_trig[k] and stage_fade[k] > 250)
         sumSenors++;
       else
         sumSenors =0;
@@ -167,11 +166,27 @@ void loop()
           //stage light control
           colorWipeStage((i*LedsNumSide),((i+1)*LedsNumSide),stage_fade[i],0,0,10);
           //pingpong control
-          colorWipePingPong(i,i+1,stage_fade[i],0,stage_fade[i]);
+          //creates a fast strong blink on the first interaction and then gose to full 
+          int pingpong_signal = 0;
+          if (stage_fade[i] >= 0 and stage_fade[i] <= 40)
+            pingpong_signal = map(stage_fade[i],0,40,0,100);
+          else
+            pingpong_signal = map(stage_fade[i],51,255,101,255);
+          
+          colorWipePingPong(i,i+1,pingpong_signal,0,pingpong_signal);
           
         }
         lastStageLights = millis();
       }
+
+      //Fade in/out flowers
+      timeFlowers = millis();
+      if ((abs(timeFlowers - lastFlowers)) > interval_timeFlowers)
+      {
+        colorWipeFlowers(0,NUM_FLOWERS,40+25*cos(2*PI/24000*(3000-timeFlowers)),25,128+127*cos(2*PI/24000*(3000-timeFlowers)),0);
+        lastFlowers = millis();
+      }
+
       break;
      
     case 1: //ritual
